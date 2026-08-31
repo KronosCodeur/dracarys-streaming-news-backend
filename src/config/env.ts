@@ -22,4 +22,5 @@ export const env = {
   syncPagesPerQuery: Number(process.env["SYNC_PAGES_PER_QUERY"] ?? 15),
   syncLookbackMonths: Number(process.env["SYNC_LOOKBACK_MONTHS"] ?? 1),
   corsOrigin: process.env["CORS_ORIGIN"] ?? "http://localhost:4200",
+  cronSecret: process.env["CRON_SECRET"],
 };

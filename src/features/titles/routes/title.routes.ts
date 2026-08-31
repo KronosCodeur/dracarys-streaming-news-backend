@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from "express";
 import { MEDIA_TYPES, PROVIDERS, TitleModel, type MediaType, type Provider } from "../models/title.model";
 import { syncAllProviders } from "../services/title-sync.service";
 import { logger } from "../../../core/logger";
+import { isCronAuthorized } from "../../../core/cron-auth";
 
 export const titleRouter = Router();
 
@@ -73,7 +74,12 @@ titleRouter.get("/:id", async (req: Request, res: Response) => {
   res.json(item);
 });
 
-titleRouter.post("/sync", async (_req: Request, res: Response) => {
+titleRouter.post("/sync", async (req: Request, res: Response) => {
+  if (!isCronAuthorized(req)) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+
   try {
     const result = await syncAllProviders();
     res.json(result);

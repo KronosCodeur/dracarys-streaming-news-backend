@@ -2,6 +2,7 @@ import express, { type Express } from "express";
 import cors from "cors";
 import { env } from "./config/env";
 import { titleRouter } from "./features/titles/routes/title.routes";
+import { cronRouter } from "./features/titles/routes/cron.routes";
 
 export function createApp(): Express {
   const app = express();
@@ -14,6 +15,7 @@ export function createApp(): Express {
   });
 
   app.use("/api/titles", titleRouter);
+  app.use("/api/cron", cronRouter);
 
   return app;
 }
