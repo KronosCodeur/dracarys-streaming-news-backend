@@ -55,6 +55,8 @@ export interface NormalizedTitle {
   posterUrl: string | null;
   backdropUrl: string | null;
   popularity: number;
+  seasonNumber: number | null;
+  isNewSeason: boolean;
 }
 
 const genreCache = new Map<MediaType, Map<number, string>>();
@@ -114,6 +116,8 @@ function normalizeResult(
     posterUrl: buildImageUrl(result.poster_path, "w500"),
     backdropUrl: buildImageUrl(result.backdrop_path, "w1280"),
     popularity: result.popularity,
+    seasonNumber: null,
+    isNewSeason: false,
   };
 }
 
@@ -166,33 +170,51 @@ async function mapWithConcurrency<T, R>(items: T[], limit: number, mapper: (item
   return results;
 }
 
-async function fetchLastAirDate(tmdbId: number): Promise<Date | null> {
+interface LatestSeasonInfo {
+  releaseDate: Date | null;
+  seasonNumber: number | null;
+}
+
+async function fetchLatestSeasonInfo(tmdbId: number): Promise<LatestSeasonInfo> {
   try {
     const detail = await tmdbFetch<TmdbTvDetail>(`/tv/${tmdbId}`, { language: env.tmdbLanguage });
-    const candidates: number[] = [];
+    let releaseDate: Date | null = null;
+    let seasonNumber: number | null = null;
+
     for (const season of detail.seasons ?? []) {
       if (season.season_number > 0 && season.air_date) {
-        candidates.push(new Date(season.air_date).getTime());
+        const date = new Date(season.air_date);
+        if (!releaseDate || date.getTime() > releaseDate.getTime()) {
+          releaseDate = date;
+          seasonNumber = season.season_number;
+        }
       }
     }
-    if (detail.last_air_date) {
-      candidates.push(new Date(detail.last_air_date).getTime());
+
+    if (!releaseDate && detail.last_air_date) {
+      releaseDate = new Date(detail.last_air_date);
     }
-    return candidates.length > 0 ? new Date(Math.max(...candidates)) : null;
+
+    return { releaseDate, seasonNumber };
   } catch (error) {
     logger.warn("TMDB tv detail fetch failed", { tmdbId, error: (error as Error).message });
-    return null;
+    return { releaseDate: null, seasonNumber: null };
   }
 }
 
-async function withLastAirDates(titles: NormalizedTitle[]): Promise<NormalizedTitle[]> {
-  const lastAirDates = await mapWithConcurrency(titles, TV_DETAIL_CONCURRENCY, (title) =>
-    fetchLastAirDate(title.tmdbId),
+async function withSeasonInfo(titles: NormalizedTitle[]): Promise<NormalizedTitle[]> {
+  const seasonInfos = await mapWithConcurrency(titles, TV_DETAIL_CONCURRENCY, (title) =>
+    fetchLatestSeasonInfo(title.tmdbId),
   );
-  return titles.map((title, index) => ({
-    ...title,
-    releaseDate: lastAirDates[index] ?? title.releaseDate,
-  }));
+  return titles.map((title, index) => {
+    const info = seasonInfos[index] as LatestSeasonInfo;
+    return {
+      ...title,
+      releaseDate: info.releaseDate ?? title.releaseDate,
+      seasonNumber: info.seasonNumber,
+      isNewSeason: info.seasonNumber !== null && info.seasonNumber > 1,
+    };
+  });
 }
 
 function formatDate(date: Date): string {
@@ -227,7 +249,7 @@ export async function discoverTitlesByProvider(
     "air_date.gte": since,
     "air_date.lte": until,
   });
-  return withLastAirDates(titles);
+  return withSeasonInfo(titles);
 }
 
 export async function discoverUpcomingTitlesByProvider(

@@ -18,6 +18,8 @@ const titleSchema = new Schema(
     posterUrl: { type: String, default: null },
     backdropUrl: { type: String, default: null },
     popularity: { type: Number, default: 0 },
+    seasonNumber: { type: Number, default: null },
+    isNewSeason: { type: Boolean, default: false },
   },
   { timestamps: true },
 );
